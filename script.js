@@ -74,6 +74,8 @@
   });
 
   /* ---------- OPEN INVITATION ---------- */
+  let hasOpened = false;
+
   function openInvitation() {
     entry.classList.add('hidden');
     invite.classList.add('revealed');
@@ -86,9 +88,63 @@
 
     document.body.style.overflowY = 'auto';
 
+    hasOpened = true;
+
     // Kick off scroll observers after content reveals
     setTimeout(setupScrollReveal, 300);
   }
+
+  /* ---------- PAUSE MUSIC WHEN TAB IS HIDDEN ---------- */
+  // Pauses when guest switches tabs/apps or opens Maps; resumes on return.
+  // Respects user's mute choice — won't unmute on its own.
+
+  let wasPlayingBeforeHide = false;
+
+  function handlePageHidden() {
+    if (!hasOpened) return;
+    if (!isMuted && !bgMusic.paused) {
+      wasPlayingBeforeHide = true;
+      fadeAudio(bgMusic, bgMusic.volume, 0, 300);
+      setTimeout(function () {
+        if (document.hidden || !document.hasFocus()) bgMusic.pause();
+      }, 350);
+    } else {
+      wasPlayingBeforeHide = false;
+    }
+  }
+
+  function handlePageVisible() {
+    if (!hasOpened) return;
+    if (wasPlayingBeforeHide && !isMuted) {
+      bgMusic.volume = 0;
+      const playPromise = bgMusic.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(function () {
+            fadeAudio(bgMusic, 0, TARGET_VOLUME, 800);
+          })
+          .catch(function () { /* ignore */ });
+      }
+      wasPlayingBeforeHide = false;
+    }
+  }
+
+  // Page Visibility API — fires on tab switch, app switch, screen lock
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) {
+      handlePageHidden();
+    } else {
+      handlePageVisible();
+    }
+  });
+
+  // Window blur/focus — fires when another window covers this one (Maps redirect, etc.)
+  window.addEventListener('blur', handlePageHidden);
+  window.addEventListener('focus', handlePageVisible);
+
+  // pagehide / pageshow — for mobile back-forward cache (Safari especially)
+  window.addEventListener('pagehide', handlePageHidden);
+  window.addEventListener('pageshow', handlePageVisible);
 
   entry.addEventListener('click', function () {
     if (!entry.classList.contains('hidden')) openInvitation();
